@@ -1,29 +1,23 @@
 """Live per-room booking statistics.
 
-Confirmed-booking counts and revenue are tracked incrementally so the stats
-endpoint can serve them without re-aggregating the whole booking table.
+Superseded in Phase 3: ``GET /rooms/{id}/stats`` now derives the confirmed count
+and revenue directly from the database (see ``app/routers/rooms.py``), which is
+always consistent with the bookings and safe under concurrency. This in-memory
+module is retained only for backwards compatibility and is no longer wired into
+any request path.
 """
-import time
 
 _stats: dict[int, dict] = {}
 
 
-def _aggregate_pause() -> None:
-    time.sleep(0.1)
-
-
 def record_create(room_id: int, price_cents: int) -> None:
     current = _stats.get(room_id, {"count": 0, "revenue": 0})
-    count, revenue = current["count"], current["revenue"]
-    _aggregate_pause()
-    _stats[room_id] = {"count": count + 1, "revenue": revenue + price_cents}
+    _stats[room_id] = {"count": current["count"] + 1, "revenue": current["revenue"] + price_cents}
 
 
 def record_cancel(room_id: int, price_cents: int) -> None:
     current = _stats.get(room_id, {"count": 0, "revenue": 0})
-    count, revenue = current["count"], current["revenue"]
-    _aggregate_pause()
-    _stats[room_id] = {"count": max(0, count - 1), "revenue": revenue - price_cents}
+    _stats[room_id] = {"count": max(0, current["count"] - 1), "revenue": current["revenue"] - price_cents}
 
 
 def get(room_id: int) -> dict:
